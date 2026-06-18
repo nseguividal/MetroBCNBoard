@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MetroBCNBoard — Simulador</title>
+<style>
+:root {
+  --l1:#B12E2A; --l1g:#ff5a57; --l1d:#3d0e0d;
+  --l2:#D2AFFF; --l2g:#d2afff; --l2d:#3d0e0d;
+  --l3:#356228; --l3g:#5dbf41; --l3d:#112009;
+  --l4:#EAD956; --l4g:#fff176; --l4d:#3d3500;
+  --l5:#3459AD; --l5g:#6b9eff; --l5d:#0d1e40;
+
+  --bg:#09090f;
+  --panel:#0f1018;
+  --card:#161824;
+  --card2:#1c1f2e;
+  --border:rgba(255,255,255,0.07);
+  --border2:rgba(255,255,255,0.14);
+  --t1:#eceef5;
+  --t2:#8892aa;
+  --t3:#424a60;
+  --mono:'Courier New',monospace;
+  --sans:'Segoe UI',system-ui,sans-serif;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+body{
+  background:var(--bg);
+  color:var(--t1);
+  font-family:var(--sans);
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+
+/* ── NOISE TEXTURE overlay ── */
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  background-size:200px;pointer-events:none;z-index:800;opacity:0.6;
+}
+
+/* ── HEADER ── */
+header{
+  flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;
+  height:58px;
+  background:var(--panel);
+  border-bottom:1px solid var(--border);
+  position:relative;
+  z-index:10;
+}
+
+.rainbow-bar{
+  position:absolute;bottom:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--l1) 0%,var(--l1) 25%,var(--l5) 50%,var(--l3) 75%,var(--l4) 100%);
+  opacity:0.9;
+}
+
+.logo{display:flex;align-items:baseline;gap:12px}
+.logo-mark{
+  font-family:var(--mono);font-size:18px;font-weight:700;
+  letter-spacing:0.1em;color:var(--t1);
+}
+.logo-mark span{color:var(--l5g)}
+.logo-sub{
+  font-size:10px;letter-spacing:0.22em;
+  color:var(--t3);text-transform:uppercase;
+}
+
+.header-right{display:flex;align-items:center;gap:20px}
+
+/* line pill badges */
+.line-pills{display:flex;gap:6px}
+.pill{
+  font-family:var(--mono);font-size:10px;font-weight:700;
+  padding:3px 8px;border-radius:3px;letter-spacing:0.06em;
+}
+
+/* live status */
+.status-chip{
+  display:flex;align-items:center;gap:7px;
+  padding:5px 12px;border-radius:20px;
+  border:1px solid var(--border2);
+  background:var(--card);
+  font-family:var(--mono);font-size:10px;letter-spacing:0.16em;color:var(--t3);
+  transition:all 0.4s;
+}
+.status-chip.on{border-color:rgba(93,191,65,0.4);color:#5dbf41}
+.status-dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.status-chip.on .status-dot{animation:blink 1.6s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+
+/* ── MAIN ── */
+main{
+  flex:1;min-height:0;
+  display:grid;
+  grid-template-columns:1fr 290px;
+}
+
+/* ── MAP ── */
+.map-wrap{
+  position:relative;overflow:hidden;
+  background:radial-gradient(ellipse at 45% 55%,#111520 0%,var(--bg) 68%);
+}
+#metro-canvas{display:block;width:100%;height:100%}
+
+/* map corner label */
+.map-corner{
+  position:absolute;bottom:16px;left:20px;
+  font-family:var(--mono);font-size:9px;letter-spacing:0.2em;
+  color:var(--t3);pointer-events:none;
+}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  display:flex;flex-direction:column;
+  background:var(--panel);
+  border-left:1px solid var(--border);
+  overflow:hidden;
+}
+
+/* ─ section header ─ */
+.sec-head{
+  padding:14px 18px 10px;
+  font-family:var(--mono);font-size:9px;letter-spacing:0.24em;
+  color:var(--t3);text-transform:uppercase;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.sec-head-dot{width:5px;height:5px;border-radius:50%;background:var(--t3)}
+
+/* ─ control area ─ */
+.controls{padding:16px 18px;border-bottom:1px solid var(--border)}
+
+.btn-toggle{
+  width:100%;padding:12px 16px;
+  border-radius:6px;
+  border:1px solid var(--border2);
+  background:var(--card2);
+  color:var(--t1);
+  font-family:var(--mono);font-size:12px;letter-spacing:0.1em;text-transform:uppercase;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  transition:all 0.25s;
+}
+.btn-toggle:hover{border-color:rgba(255,255,255,0.25);background:#222538}
+.btn-toggle.on{
+  border-color:rgba(255,90,87,0.5);
+  background:rgba(177,46,42,0.15);
+  color:var(--l1g);
+}
+
+.ctrl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.ctrl-box{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:6px;padding:10px 12px;
+  display:flex;flex-direction:column;gap:6px;
+}
+.ctrl-label{font-family:var(--mono);font-size:9px;letter-spacing:0.2em;color:var(--t3);text-transform:uppercase}
+.ctrl-val{font-family:var(--mono);font-size:22px;color:var(--t1);line-height:1}
+.ctrl-unit{font-size:10px;color:var(--t3)}
+input[type=range]{
+  width:100%;accent-color:var(--l5g);cursor:pointer;
+  margin-top:2px;height:3px;
+}
+
+/* ─ legend ─ */
+.legend{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+
+.legend-row{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 10px;border-radius:6px;
+  border:1px solid transparent;
+  transition:border-color 0.3s,background 0.3s;
+}
+.legend-row.active-line{border-color:rgba(255,255,255,0.1);background:var(--card)}
+
+.legend-bar{
+  width:4px;height:32px;border-radius:2px;flex-shrink:0;
+}
+.legend-info{flex:1;min-width:0}
+.legend-name{font-family:var(--mono);font-size:10px;letter-spacing:0.06em;color:var(--t2)}
+.legend-stations{font-size:10px;color:var(--t3);margin-top:2px}
+.legend-badge{
+  font-family:var(--mono);font-size:11px;font-weight:700;
+  padding:3px 8px;border-radius:4px;
+  min-width:28px;text-align:center;
+}
+
+/* ─ log ─ */
+.log-area{flex:1;display:flex;flex-direction:column;min-height:0}
+#log-list{
+  flex:1;overflow-y:auto;padding:4px 0;
+  scrollbar-width:thin;scrollbar-color:var(--card2) transparent;
+}
+.log-row{
+  display:flex;gap:8px;align-items:baseline;
+  padding:5px 18px;
+  border-left:2px solid transparent;
+  font-family:var(--mono);font-size:10px;
+  transition:opacity 0.5s;
+}
+.log-row.fresh{opacity:1}
+.log-row:not(.fresh){opacity:0.45}
+.log-ts{color:var(--t3);flex-shrink:0}
+.log-text{color:var(--t2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ─ stats bar ─ */
+.stats{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  border-top:1px solid var(--border);
+}
+.stat{
+  padding:10px 14px;
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;gap:2px;
+}
+.stat:last-child{border-right:none}
+.stat-n{font-family:var(--mono);font-size:20px;color:var(--t1)}
+.stat-l{font-family:var(--mono);font-size:8px;letter-spacing:0.18em;color:var(--t3);text-transform:uppercase}
+
+/* ─ tooltip ─ */
+#tip{
+  position:fixed;pointer-events:none;z-index:900;
+  background:var(--card2);border:1px solid var(--border2);
+  border-radius:6px;padding:8px 12px;
+  font-family:var(--mono);font-size:11px;
+  opacity:0;transition:opacity 0.12s;
+  white-space:nowrap;
+}
+#tip.show{opacity:1}
+#tip-line{font-size:9px;color:var(--t3);margin-top:3px}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="rainbow-bar"></div>
+  <div class="logo">
+    <div class="logo-mark">Metro<span>BCN</span>Board</div>
+    <div class="logo-sub">Simulador LED </div>
+  </div>
+  <div class="header-right">
+    <div class="line-pills">
+      <div class="pill" style="background:rgba(177,46,42,0.25);color:#ff5a57;border:1px solid rgba(177,46,42,0.5)">L1</div>
+      <div class="pill" style="background:rgba(210,175,255,0.25);color:#d2afff;border:1px solid rgba(210,175,255,0.5)">L2</div>
+      <div class="pill" style="background:rgba(53,98,40,0.25);color:#5dbf41;border:1px solid rgba(53,98,40,0.5)">L3</div>
+      <div class="pill" style="background:rgba(234,217,86,0.15);color:#fff176;border:1px solid rgba(234,217,86,0.4)">L4</div>
+      <div class="pill" style="background:rgba(52,89,173,0.25);color:#6b9eff;border:1px solid rgba(52,89,173,0.5)">L5</div>
+    </div>
+    <div class="status-chip" id="status-chip">
+      <div class="status-dot"></div>
+      <span id="status-text">ATURAT</span>
+    </div>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main>
+  <div class="map-wrap">
+    <canvas id="metro-canvas"></canvas>
+    <div class="map-corner">// ESQUEMA SIMPLIFICAT - Metro de Barcelona</div>
+  </div>
+
+  <aside class="sidebar">
+
+    <!-- Controls -->
+    <div class="sec-head">
+      <span>Panell de control</span>
+      <div class="sec-head-dot"></div>
+    </div>
+    <div class="controls">
+      <button class="btn-toggle" id="toggle-btn" onclick="toggleSim()">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+          <circle cx="5" cy="5" r="5"/>
+        </svg>
+        <span id="btn-label">Iniciar simulació</span>
+      </button>
+
+      <div class="ctrl-grid">
+        <div class="ctrl-box">
+          <div class="ctrl-label">Interval</div>
+          <div><span class="ctrl-val" id="v-speed">3</span><span class="ctrl-unit"> s</span></div>
+          <input type="range" min="1" max="10" step="1" value="3" oninput="setSpeed(this.value)"/>
+        </div>
+        <div class="ctrl-box">
+          <div class="ctrl-label">Trens/línia</div>
+          <div><span class="ctrl-val" id="v-trains">2</span></div>
+          <input type="range" min="1" max="5" step="1" value="2" oninput="setTrains(this.value)"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="sec-head">
+      <span>Línies actives</span>
+      <div class="sec-head-dot"></div>
+    </div>
+    <div class="legend">
+      <div class="legend-row" id="leg-L1">
+        <div class="legend-bar" style="background:var(--l1)"></div>
+        <div class="legend-info">
+          <div class="legend-name">L1 — Vermella</div>
+          <div class="legend-stations" id="ls-L1">- estacions</div>
+        </div>
+        <div class="legend-badge" id="lb-L1" style="background:rgba(177,46,42,0.2);color:var(--l1g)">–</div>
+      </div>
+      <div class="legend-row" id="leg-L2">
+        <div class="legend-bar" style="background:var(--l2)"></div>
+        <div class="legend-info">
+          <div class="legend-name">L2 — Lila</div>
+          <div class="legend-stations" id="ls-L2">- estacions</div>
+        </div>
+        <div class="legend-badge" id="lb-L2" style="background:rgba(210,175,255,0.2);color:var(--l2g)">–</div>
+      </div>
+      <div class="legend-row" id="leg-L3">
+        <div class="legend-bar" style="background:var(--l3)"></div>
+        <div class="legend-info">
+          <div class="legend-name">L3 — Verda</div>
+          <div class="legend-stations" id="ls-L3">- estacions</div>
+        </div>
+        <div class="legend-badge" id="lb-L3" style="background:rgba(53,98,40,0.2);color:var(--l3g)">–</div>
+      </div>
+      <div class="legend-row" id="leg-L4">
+        <div class="legend-bar" style="background:var(--l4)"></div>
+        <div class="legend-info">
+          <div class="legend-name">L4 — Groga</div>
+          <div class="legend-stations" id="ls-L4">- estacions</div>
+        </div>
+        <div class="legend-badge" id="lb-L4" style="background:rgba(234,217,86,0.12);color:var(--l4g)">–</div>
+      </div>
+      <div class="legend-row" id="leg-L5">
+        <div class="legend-bar" style="background:var(--l5)"></div>
+        <div class="legend-info">
+          <div class="legend-name">L5 — Blava</div>
+          <div class="legend-stations" id="ls-L5">- estacions</div>
+        </div>
+        <div class="legend-badge" id="lb-L5" style="background:rgba(52,89,173,0.2);color:var(--l5g)">–</div>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="sec-head">
+      <span>Registre d'events</span>
+      <div class="sec-head-dot"></div>
+    </div>
+    <div class="log-area">
+      <div id="log-list"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-n" id="st-trains">0</div>
+        <div class="stat-l">Trens</div>
+      </div>
+      <div class="stat">
+        <div class="stat-n" id="st-polls">0</div>
+        <div class="stat-l">Consultes</div>
+      </div>
+      <div class="stat">
+        <div class="stat-n" id="st-led">0</div>
+        <div class="stat-l">LEDs ON</div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<div id="tip"><div id="tip-name"></div><div id="tip-line"></div></div>
+
+<script src="config.js"></script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   MAP LAYOUT
+   ─────────────────────────────────────────────────────────────
+   Coordinate system: x,y in [0..1] (relative to canvas W×H).
+
+   L1 — completely HORIZONTAL at y=0.50
+   L5 — completely VERTICAL   at x=0.50
+   L3 — diagonal SW→NE  (y decreases as x increases)
+   L4 — diagonal NW→SE  (y increases as x increases)
+
+   Intersections are marked as interchange:true and share
+   the same (x,y) across lines so they overlap on the canvas.
+═══════════════════════════════════════════════════════════════ */
+
+/* ── Line metadata ─────────────────────────────────────── */
+const LINES = {
+  L1:{ id:'L1', color:'#B12E2A', glow:'#ff5a57', idle:'#3d0e0d', name:'L1' },
+  L2:{ id:'L2', color:'#d2afff', glow:'#e1c4ff', idle:'#e6d7ff', name:'L2' },
+  L3:{ id:'L3', color:'#356228', glow:'#5dbf41', idle:'#112009', name:'L3' },
+  L4:{ id:'L4', color:'#EAD956', glow:'#fff176', idle:'#3d3500', name:'L4' },
+  L5:{ id:'L5', color:'#3459AD', glow:'#6b9eff', idle:'#0d1e40', name:'L5' },
+};
+
+/* ── Station definitions ───────────────────────────────── */
+/*
+  label_side: 'above' | 'below' | 'left' | 'right'
+    — where the station name label is placed relative to the dot
+*/
+const STATIONS = [
+
+  // ── L1 HORIZONTAL at y=0.50 ────────────────────────────
+  { id:'l1_01', name:'Bellvitge',      line:'L1', x:0.04, y:0.50, label_side:'below' },
+  { id:'l1_02', name:'Av. Carrilet',   line:'L1', x:0.10, y:0.50, label_side:'above' },
+  { id:'l1_03', name:'Pubilla Cases',  line:'L1', x:0.16, y:0.50, label_side:'below' },
+  { id:'l1_04', name:'Can Serra',      line:'L1', x:0.22, y:0.50, label_side:'above' },
+  { id:'l1_05', name:'Torrassa',       line:'L1', x:0.28, y:0.50, label_side:'below' },
+  { id:'l1_06', name:'Sta. Eulàlia',   line:'L1', x:0.34, y:0.50, label_side:'above' },
+  { id:'l1_07', name:'Mercat Nou',     line:'L1', x:0.40, y:0.50, label_side:'below' },
+  { id:'l1_08', name:'Hostafrancs',    line:'L1', x:0.44, y:0.50, label_side:'above' },
+  // Espanya: L1 × L3 diagonal (L3 crosses y=0.50 at x≈0.47)
+  { id:'l1_09', name:'Espanya',        line:'L1', x:0.47, y:0.50, label_side:'below', interchange:true },
+  // Universitat: L1 × L5 vertical (L5 is at x=0.50)
+  { id:'l1_10', name:'Universitat',    line:'L1', x:0.50, y:0.50, label_side:'above', interchange:true },
+  { id:'l1_11', name:'Catalunya',      line:'L1', x:0.54, y:0.50, label_side:'below', interchange:true },
+  { id:'l1_12', name:'Urquinaona',     line:'L1', x:0.58, y:0.50, label_side:'above' },
+  // Arc de Triomf: L1 × L4 diagonal (L4 crosses y=0.50 at x≈0.62)
+  { id:'l1_13', name:'Arc de Triomf',  line:'L1', x:0.62, y:0.50, label_side:'below', interchange:true },
+  { id:'l1_14', name:'Marina',         line:'L1', x:0.67, y:0.50, label_side:'above' },
+  { id:'l1_15', name:'Glòries',        line:'L1', x:0.72, y:0.50, label_side:'below' },
+  { id:'l1_16', name:'Clot',           line:'L1', x:0.78, y:0.50, label_side:'above' },
+  { id:'l1_17', name:'Sagrera',        line:'L1', x:0.84, y:0.50, label_side:'below' },
+  { id:'l1_18', name:'Navas',          line:'L1', x:0.89, y:0.50, label_side:'above' },
+  { id:'l1_19', name:'Fabra i Puig',   line:'L1', x:0.94, y:0.50, label_side:'below' },
+  { id:'l1_20', name:'Fondo',          line:'L1', x:0.98, y:0.50, label_side:'above' },
+
+   // ── L2 LILA ────────────────────────────
+  { id:'l2_01', name:'Truco',          line:'L2', x:0.2, y:0.20, label_side:'below' },
+  { id:'l2_02', name:'Trato',          line:'L2', x:0.3, y:0.25, label_side:'above' },
+  { id:'l2_03', name:'Mec',            line:'L2', x:0.45, y:0.30, label_side:'above' },
+  { id:'l2_04', name:'Moc',            line:'L2', x:0.6, y:0.35, label_side:'above' },
+  { id:'l2_05', name:'Muc',            line:'L2', x:0.8, y:0.40, label_side:'below' },
+
+  // ── L5 VERTICAL at x=0.50 ──────────────────────────────
+  { id:'l5_01', name:"Cornellà",       line:'L5', x:0.50, y:0.95, label_side:'right' },
+  { id:'l5_02', name:'Gavarra',        line:'L5', x:0.50, y:0.89, label_side:'left'  },
+  { id:'l5_03', name:'Sant Ildefons',  line:'L5', x:0.50, y:0.83, label_side:'right' },
+  { id:'l5_04', name:'Can Boixeres',   line:'L5', x:0.50, y:0.77, label_side:'left'  },
+  { id:'l5_05', name:'Collblanc',      line:'L5', x:0.50, y:0.71, label_side:'right' },
+  { id:'l5_06', name:'Badal',          line:'L5', x:0.50, y:0.65, label_side:'left'  },
+  { id:'l5_07', name:'Pl. del Centre', line:'L5', x:0.50, y:0.59, label_side:'right' },
+  // L5 × L3 diagonal: L3 crosses x=0.50 at y≈0.55
+  { id:'l5_08', name:'Sants',          line:'L5', x:0.50, y:0.55, label_side:'left',  interchange:true },
+  // Universitat = L5 × L1 (already defined on L1 at x=0.50,y=0.50)
+  { id:'l5_09', name:'Universitat',    line:'L5', x:0.50, y:0.50, label_side:'right', interchange:true },
+  { id:'l5_10', name:'Diagonal',       line:'L5', x:0.50, y:0.44, label_side:'left'  },
+  // L5 × L4 diagonal: L4 crosses x=0.50 at y≈0.38
+  { id:'l5_11', name:'Verdaguer',      line:'L5', x:0.50, y:0.38, label_side:'right', interchange:true },
+  { id:'l5_12', name:'Sagrada Fam.',   line:'L5', x:0.50, y:0.32, label_side:'left'  },
+  { id:'l5_13', name:'Encants',        line:'L5', x:0.50, y:0.26, label_side:'right' },
+  { id:'l5_14', name:'Congrés',        line:'L5', x:0.50, y:0.20, label_side:'left'  },
+  { id:'l5_15', name:'Maragall',       line:'L5', x:0.50, y:0.14, label_side:'right' },
+  { id:'l5_16', name:"Vall d'Hebron",  line:'L5', x:0.50, y:0.07, label_side:'left'  },
+
+  // ── L3 DIAGONAL SW → NE (slope: Δy=-0.10 per Δx=+0.15) ──
+  // Equation: y = 0.80 - (x - 0.05) * (0.70/0.80)
+  // We pick x from 0.05 to 0.85, y from ~0.80 down to ~0.10
+  { id:'l3_01', name:'Zona Univ.',     line:'L3', x:0.05, y:0.80, label_side:'below' },
+  { id:'l3_02', name:'Palau Reial',    line:'L3', x:0.12, y:0.74, label_side:'right' },
+  { id:'l3_03', name:'Les Corts',      line:'L3', x:0.19, y:0.68, label_side:'below' },
+  { id:'l3_04', name:'M. Cristina',    line:'L3', x:0.26, y:0.62, label_side:'right' },
+  { id:'l3_05', name:'Diagonal',       line:'L3', x:0.33, y:0.56, label_side:'below' },
+  // L3 × L1: at y=0.50 → x=0.47 (already l1_09 Espanya)
+  { id:'l3_06', name:'Espanya',        line:'L3', x:0.47, y:0.50, label_side:'above', interchange:true },
+  // L3 × L5: at x=0.50 → y=0.55  (l5_08 Sants)
+  { id:'l3_07', name:'Sants',          line:'L3', x:0.50, y:0.55, label_side:'above', interchange:true },
+  { id:'l3_08', name:"Pg. de Gràcia",  line:'L3', x:0.55, y:0.43, label_side:'above' },
+  { id:'l3_09', name:'Catalunya',      line:'L3', x:0.54, y:0.50, label_side:'right', interchange:true },
+  { id:'l3_10', name:'Liceu',          line:'L3', x:0.62, y:0.35, label_side:'above' },
+  { id:'l3_11', name:'Drassanes',      line:'L3', x:0.69, y:0.28, label_side:'right' },
+  { id:'l3_12', name:'Barceloneta',    line:'L3', x:0.76, y:0.21, label_side:'above' },
+  { id:'l3_13', name:'Bogatell',       line:'L3', x:0.83, y:0.14, label_side:'right' },
+  { id:'l3_14', name:'La Pau',         line:'L3', x:0.88, y:0.09, label_side:'above' },
+
+  // ── L4 DIAGONAL NW → SE (slope: Δy=+0.10 per Δx=+0.15) ──
+  // Equation: y = 0.12 + (x - 0.08) * (0.70/0.80)
+  { id:'l4_01', name:'Trinitat Nova',  line:'L4', x:0.08, y:0.12, label_side:'above' },
+  { id:'l4_02', name:'Via Júlia',      line:'L4', x:0.16, y:0.22, label_side:'left'  },
+  { id:'l4_03', name:'Llucmajor',      line:'L4', x:0.24, y:0.30, label_side:'above' },
+  { id:'l4_04', name:'Maragall',       line:'L4', x:0.32, y:0.38, label_side:'left'  },
+  // L4 × L5: at x=0.50 → y=0.38  (l5_11 Verdaguer)
+  { id:'l4_05', name:'Verdaguer',      line:'L4', x:0.50, y:0.38, label_side:'above', interchange:true },
+  // L4 × L1: at y=0.50 → x=0.62  (l1_13 Arc de Triomf)
+  { id:'l4_06', name:'Arc de Triomf',  line:'L4', x:0.62, y:0.50, label_side:'below', interchange:true },
+  { id:'l4_07', name:'Glòries',        line:'L4', x:0.70, y:0.58, label_side:'left'  },
+  { id:'l4_08', name:'Clot',           line:'L4', x:0.78, y:0.66, label_side:'above' },
+  { id:'l4_09', name:'El Maresme',     line:'L4', x:0.86, y:0.74, label_side:'left'  },
+  { id:'l4_10', name:'Selva de Mar',   line:'L4', x:0.92, y:0.80, label_side:'above' },
+];
+
+/* ── Line paths (ordered station IDs) ─────────────────── */
+const LINE_PATHS = {
+  L1:['l1_01','l1_02','l1_03','l1_04','l1_05','l1_06','l1_07','l1_08',
+      'l1_09','l1_10','l1_11','l1_12','l1_13','l1_14','l1_15','l1_16','l1_17','l1_18','l1_19','l1_20'],
+  L2:['l2_01','l2_02','l2_03','l2_04','l2_05'],
+  L5:['l5_01','l5_02','l5_03','l5_04','l5_05','l5_06','l5_07','l5_08',
+      'l5_09','l5_10','l5_11','l5_12','l5_13','l5_14','l5_15','l5_16'],
+  L3:['l3_01','l3_02','l3_03','l3_04','l3_05','l3_06','l3_07','l3_08','l3_09','l3_10','l3_11','l3_12','l3_13','l3_14'],
+  L4:['l4_01','l4_02','l4_03','l4_04','l4_05','l4_06','l4_07','l4_08','l4_09','l4_10'],
+};
+
+/* ── Build lookups ─────────────────────────────────────── */
+const byId       = {};
+const byLine     = {L1:[],L2:[],L3:[],L4:[],L5:[]};
+STATIONS.forEach(s=>{
+  byId[s.id]=s;
+  byLine[s.line].push(s);
+});
+// populate legend station counts
+['L1','L2','L3','L4','L5'].forEach(lid=>{
+  document.getElementById('ls-'+lid).textContent = byLine[lid].length + ' estacions';
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   LED STATE
+   Each station has a brightness value [0..1].
+   0   = LED off (dim ghost)
+   1   = LED fully on (train present)
+   No pulsing — it's binary on/off with a smooth CSS-like
+   transition handled by lerping in the render loop.
+═══════════════════════════════════════════════════════════════ */
+const brightness = {};   // stationId → current brightness (animated)
+const target     = {};   // stationId → target brightness (0 or 1)
+STATIONS.forEach(s=>{ brightness[s.id]=0; target[s.id]=0; });
+
+/* ═══════════════════════════════════════════════════════════════
+   MOCK API
+   ─────────────────────────────────────────────────────────────
+   Replace fetchTrainPositions() with a real TMB API call:
+
+   GET https://api.tmb.cat/v1/transit/linies/metro/{lineId}/vehicles
+   Headers: { 'app_id': YOUR_APP_ID, 'app_key': YOUR_APP_KEY }
+
+   Keep the same return format: Array<{ lineId, stationId, stationName }>
+═══════════════════════════════════════════════════════════════ */
+
+/*
+// Fake API info
+async function fetchTrainPositions() {
+  await new Promise(r => setTimeout(r, 60 + Math.random()*180)); // fake latency
+
+  const result = [];
+  for (const lid of ['L1','L2','L3','L4','L5']) {
+    const pool    = byLine[lid];
+    const picks   = [...pool].sort(()=>Math.random()-0.5).slice(0, trainsPerLine);
+    picks.forEach(s=> result.push({ lineId:lid, stationId:s.id, stationName:s.name }));
+  }
+  return result;
+}
+*/
+
+/* ═══════════════════════════════════════════════════════════════
+   CONNEXIÓ AMB L'API DE TMB
+═══════════════════════════════════════════════════════════════ */
+
+// Diccionari per traduir el 'codi_estacio' de TMB als nostres IDs del mapa.
+// EXEMPLE: Hauràs d'omplir-ho amb els codis reals.
+const MAPA_ESTACIONS_TMB = {
+  // L1
+  120: 'l1_20', // Si 120 és Fondo
+  119: 'l1_19', // Si 119 és Fabra i Puig
+  // ... (afegeix la resta de codis)
+};
+
+async function fetchTrainPositions() {
+  const result = [];
+  
+  try {
+    // 1. Fem la crida a l'API real (Substitueix la URL per l'endpoint correcte de TMB)
+    const response = await fetch('https://api.tmb.cat/v1/itransit/metro/estacions?estacions=122&app_id=' + API_CONFIG.APP_ID + '&app_key=' + API_CONFIG.APP_KEY, {
+      headers: {
+        'app_id': API_CONFIG.APP_ID,
+        'app_key': API_CONFIG.APP_KEY
+      }
+    });
+
+    if (!response.ok) throw new Error("Error connectant a l'API de TMB");
+    const data = await response.json();
+
+    // 2. Calculem el temps actual per saber quins trens estan "ara" a l'estació
+    const ara = Date.now();
+
+    // 3. Recorrem l'estructura del JSON
+    if (data.linies) {
+      data.linies.forEach(linia => {
+        const lineId = linia.nom_linia; // Retorna "L1", "L2", etc.
+        
+        // Només processem les línies que tenim al nostre mapa
+        if (!byLine[lineId]) return;
+
+        if (linia.estacions) {
+          linia.estacions.forEach(estacioTMB => {
+            
+            // Traduïm el codi de TMB al nostre ID visual (ex: 120 -> 'l1_20')
+            const appStationId = MAPA_ESTACIONS_TMB[estacioTMB.codi_estacio];
+            
+            // Si l'estació no està al nostre diccionari, la ignorem
+            if (!appStationId) return;
+
+            // Recorrem els trajectes i els trens d'aquesta estació
+            if (estacioTMB.linies_trajectes) {
+              estacioTMB.linies_trajectes.forEach(trajecte => {
+                if (trajecte.propers_trens) {
+                  trajecte.propers_trens.forEach(tren => {
+                    
+                    // LÒGICA D'ENCÈS DEL LED:
+                    // Calculem quants mil·lisegons falten perquè arribi el tren
+                    const diferenciaTemps = tren.temps_arribada - ara;
+                    
+                    // Considerem que el tren "està a l'estació" si l'hora d'arribada
+                    // és entre fa 15 segons (-15000ms) i d'aquí a 30 segons (30000ms).
+                    // Això farà que el LED s'encengui durant 45 segons per tren.
+                    if (diferenciaTemps > -15000 && diferenciaTemps < 30000) {
+                      
+                      // Afegim el tren al resultat que el nostre simulador entén
+                      result.push({
+                        lineId: lineId,
+                        stationId: appStationId,
+                        stationName: byId[appStationId].name // Agafem el nom net del nostre codi
+                      });
+                      
+                    }
+                  });
+                }
+              });
+            }
+          });
+        }
+      });
+    }
+
+    return result;
+
+  } catch (error) {
+    console.error("Error obtenint dades:", error);
+    throw error; // Llença l'error perquè el simulador el mostri al registre (log)
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SIMULATION ENGINE
+═══════════════════════════════════════════════════════════════ */
+let running      = false;
+let pollTimer    = null;
+let pollCount    = 0;
+let trainsPerLine= 2;
+let pollDelay    = 3000;
+
+// Which stations currently have a train (stationId → lineId)
+const activeTrains = {};
+
+async function poll() {
+  if (!running) return;
+  pollCount++;
+  document.getElementById('st-polls').textContent = pollCount;
+
+  let positions;
+  try { positions = await fetchTrainPositions(); }
+  catch(e){ addLog('ERROR: '+e.message, null); return; }
+
+  // Clear previous train positions
+  Object.keys(activeTrains).forEach(id=>{
+    target[id] = 0;
+    delete activeTrains[id];
+  });
+
+  // Apply new positions
+  const lineCounts = {L1:0,L2:0,L3:0,L4:0,L5:0};
+  positions.forEach(({lineId,stationId,stationName})=>{
+    target[stationId]      = 1;
+    activeTrains[stationId]= lineId;
+    lineCounts[lineId]++;
+    addLog(`Tren a ${stationName}`, lineId);
+  });
+
+  document.getElementById('st-trains').textContent  = positions.length;
+  document.getElementById('st-led').textContent     = positions.length;
+
+  // Update legend badges
+  ['L1','L2','L3','L4','L5'].forEach(lid=>{
+    const n = lineCounts[lid];
+    document.getElementById('lb-'+lid).textContent = n;
+    document.getElementById('leg-'+lid).classList.toggle('active-line', n>0);
+  });
+}
+
+function startSim(){
+  running=true; pollCount=0;
+  document.getElementById('status-chip').classList.add('on');
+  document.getElementById('status-text').textContent='EN DIRECTE';
+  document.getElementById('toggle-btn').classList.add('on');
+  document.getElementById('btn-label').textContent='Aturar simulació';
+  addLog('Simulació iniciada — connectant a API…', null);
+  poll();
+  pollTimer = setInterval(poll, pollDelay);
+}
+
+function stopSim(){
+  running=false;
+  clearInterval(pollTimer); pollTimer=null;
+  document.getElementById('status-chip').classList.remove('on');
+  document.getElementById('status-text').textContent='ATURAT';
+  document.getElementById('toggle-btn').classList.remove('on');
+  document.getElementById('btn-label').textContent='Iniciar simulació';
+  // turn off all LEDs
+  STATIONS.forEach(s=>{ target[s.id]=0; delete activeTrains[s.id]; });
+  ['L1','L2','L3','L4','L5'].forEach(lid=>{
+    document.getElementById('lb-'+lid).textContent='–';
+    document.getElementById('leg-'+lid).classList.remove('active-line');
+  });
+  document.getElementById('st-trains').textContent='0';
+  document.getElementById('st-led').textContent='0';
+  addLog('Simulació aturada.', null);
+}
+
+function toggleSim(){ running ? stopSim() : startSim(); }
+
+function setSpeed(v){
+  pollDelay=parseInt(v)*1000;
+  document.getElementById('v-speed').textContent=v;
+  if(running){ clearInterval(pollTimer); pollTimer=setInterval(poll,pollDelay); }
+}
+
+function setTrains(v){
+  trainsPerLine=parseInt(v);
+  document.getElementById('v-trains').textContent=v;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LOG
+═══════════════════════════════════════════════════════════════ */
+const LOG_COLORS={L1:'#ff5a57',L2:'#d2afff',L3:'#5dbf41',L4:'#fff176',L5:'#6b9eff'};
+const MAX_LOG=80;
+
+function addLog(msg, lineId){
+  const c   = document.getElementById('log-list');
+  const now = new Date();
+  const ts  = now.toTimeString().slice(0,8);
+  const row = document.createElement('div');
+  row.className='log-row fresh';
+  row.style.borderLeftColor = lineId ? LOG_COLORS[lineId] : 'transparent';
+  row.innerHTML=`<span class="log-ts">${ts}</span><span class="log-text" style="color:${lineId?LOG_COLORS[lineId]:'#8892aa'}">${msg}</span>`;
+  c.insertBefore(row,c.firstChild);
+  setTimeout(()=>row.classList.remove('fresh'),1200);
+  while(c.children.length>MAX_LOG) c.removeChild(c.lastChild);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CANVAS RENDERER
+═══════════════════════════════════════════════════════════════ */
+const canvas = document.getElementById('metro-canvas');
+const ctx    = canvas.getContext('2d');
+
+let CW=0, CH=0;
+const MPAD = 55; // margin for labels
+
+function resize(){
+  const wrap = canvas.parentElement;
+  const dpr  = window.devicePixelRatio||1;
+  CW = wrap.clientWidth;
+  CH = wrap.clientHeight;
+  canvas.style.width =CW+'px';
+  canvas.style.height=CH+'px';
+  canvas.width =CW*dpr;
+  canvas.height=CH*dpr;
+  ctx.scale(dpr,dpr);
+}
+
+/* Convert relative [0,1] coords to canvas pixels */
+function px(rx,ry){ return [ MPAD + rx*(CW-MPAD*2), MPAD + ry*(CH-MPAD*2) ]; }
+
+/* Lerp brightness towards target (smooth on/off, no pulse) */
+const LERP_ON  = 0.07;  // speed to turn ON
+const LERP_OFF = 0.04;  // speed to turn OFF
+
+function lerpBrightness(){
+  STATIONS.forEach(s=>{
+    const t = target[s.id]||0;
+    const b = brightness[s.id]||0;
+    const speed = t>b ? LERP_ON : LERP_OFF;
+    brightness[s.id] = b + (t-b)*speed;
+    if(Math.abs(brightness[s.id]-t)<0.002) brightness[s.id]=t;
+  });
+}
+
+/* Draw the track line */
+function drawTrack(lineId){
+  const line = LINES[lineId];
+  const ids  = LINE_PATHS[lineId];
+  if(!ids||ids.length<2) return;
+
+  ctx.beginPath();
+  const [x0,y0] = px(byId[ids[0]].x, byId[ids[0]].y);
+  ctx.moveTo(x0,y0);
+  for(let i=1;i<ids.length;i++){
+    const s=byId[ids[i]];
+    if(!s) continue;
+    const [x,y]=px(s.x,s.y);
+    ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle = line.color+'66';
+  ctx.lineWidth   = 4;
+  ctx.lineCap='round';
+  ctx.lineJoin='round';
+  ctx.stroke();
+
+  // second pass: bright highlight on segments that have active trains
+  // (draw a slightly brighter layer on top)
+  ctx.strokeStyle = line.color+'33';
+  ctx.lineWidth   = 7;
+  ctx.stroke();
+}
+
+/* Draw a station LED node */
+function drawNode(s){
+  const b     = brightness[s.id]||0;
+  const line  = LINES[s.line];
+  const [cx,cy] = px(s.x,s.y);
+  const isIC  = s.interchange;
+  const r     = isIC ? 6 : 4;
+
+  // glow halo when on
+  if(b>0.05){
+    const haloR = r + 6 + b*12;
+    const g = ctx.createRadialGradient(cx,cy,0,cx,cy,haloR);
+    const hex = line.glow;
+    g.addColorStop(0, hex+Math.round(b*180).toString(16).padStart(2,'0'));
+    g.addColorStop(1, hex+'00');
+    ctx.beginPath();
+    ctx.arc(cx,cy,haloR,0,Math.PI*2);
+    ctx.fillStyle=g;
+    ctx.fill();
+  }
+
+  // LED body — interpolate between idle and glow color
+  ctx.beginPath();
+  ctx.arc(cx,cy,r,0,Math.PI*2);
+  const bodyColor = b>0.1 ? line.glow : line.idle;
+  const bodyAlpha = 0.25 + b*0.75;
+  ctx.fillStyle = bodyColor + Math.round(bodyAlpha*255).toString(16).padStart(2,'0');
+  ctx.fill();
+
+  // white hotspot at center when fully on
+  if(b>0.5){
+    ctx.beginPath();
+    ctx.arc(cx,cy,r*0.4,0,Math.PI*2);
+    ctx.fillStyle=`rgba(255,255,255,${(b-0.5)*0.9})`;
+    ctx.fill();
+  }
+
+  // interchange ring
+  if(isIC){
+    ctx.beginPath();
+    ctx.arc(cx,cy,r+2.5,0,Math.PI*2);
+    ctx.strokeStyle = b>0.1 ? line.glow+'cc' : line.color+'55';
+    ctx.lineWidth=1.5;
+    ctx.stroke();
+  }
+}
+
+/* Draw station name label — always visible */
+function drawLabel(s){
+  const b     = brightness[s.id]||0;
+  const line  = LINES[s.line];
+  const [cx,cy] = px(s.x,s.y);
+  const r     = s.interchange ? 6 : 4;
+  const GAP   = 8;
+
+  // font: slightly bolder when active
+  const size  = s.interchange ? 10 : 9;
+  ctx.font    = `${b>0.3?'600':'400'} ${size}px 'Courier New',monospace`;
+
+  // colour: line glow when active, else dim
+  ctx.fillStyle = b>0.3
+    ? line.glow+'ff'
+    : line.color+'99';
+
+  const name  = s.name;
+  const side  = s.label_side;
+
+  if(side==='above'){
+    ctx.textAlign='center';
+    ctx.fillText(name, cx, cy - r - GAP);
+  } else if(side==='below'){
+    ctx.textAlign='center';
+    ctx.fillText(name, cx, cy + r + GAP + size);
+  } else if(side==='left'){
+    ctx.textAlign='right';
+    ctx.fillText(name, cx - r - GAP, cy + size*0.35);
+  } else { // right
+    ctx.textAlign='left';
+    ctx.fillText(name, cx + r + GAP, cy + size*0.35);
+  }
+}
+
+/* Main render loop */
+function render(){
+  ctx.clearRect(0,0,CW,CH);
+
+  // subtle dot grid background
+  ctx.fillStyle='rgba(255,255,255,0.018)';
+  for(let gx=MPAD;gx<CW-MPAD;gx+=28){
+    for(let gy=MPAD;gy<CH-MPAD;gy+=28){
+      ctx.beginPath();ctx.arc(gx,gy,1,0,Math.PI*2);ctx.fill();
+    }
+  }
+
+  // tracks
+  ['L5','L4','L3','L2','L1'].forEach(drawTrack);
+
+  // lerp brightnesses
+  lerpBrightness();
+
+  // LED nodes
+  STATIONS.forEach(s=>drawNode(s));
+
+  // labels (drawn on top of nodes)
+  STATIONS.forEach(s=>drawLabel(s));
+
+  requestAnimationFrame(render);
+}
+
+/* ─ tooltip ─ */
+const TIP    = document.getElementById('tip');
+const TIP_N  = document.getElementById('tip-name');
+const TIP_L  = document.getElementById('tip-line');
+const HIT    = 14;
+
+canvas.addEventListener('mousemove',e=>{
+  const r=canvas.getBoundingClientRect();
+  const mx=e.clientX-r.left, my=e.clientY-r.top;
+  let hit=null;
+  for(const s of STATIONS){
+    const [cx,cy]=px(s.x,s.y);
+    if(Math.hypot(mx-cx,my-cy)<HIT){ hit=s; break; }
+  }
+  if(hit){
+    TIP.style.left=(e.clientX+16)+'px';
+    TIP.style.top =(e.clientY-32)+'px';
+    TIP_N.textContent=hit.name;
+    const b=brightness[hit.id]||0;
+    const state = b>0.5 ? '🟢 TREN PRESENT' : '⚫ BUIT';
+    TIP_L.textContent=`${hit.line}  ·  ID: ${hit.id}  ·  ${state}`;
+    TIP.classList.add('show');
+  } else {
+    TIP.classList.remove('show');
+  }
+});
+canvas.addEventListener('mouseleave',()=>TIP.classList.remove('show'));
+
+/* ─ boot ─ */
+window.addEventListener('resize',()=>{ resize(); });
+resize();
+render();
+addLog('Sistema inicialitzat. Prem "Iniciar simulació" per arrencar.', null);
+</script>
+</body>
+</html>
